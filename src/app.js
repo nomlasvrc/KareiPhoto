@@ -30,6 +30,10 @@ function setStatus(text, tone = '') {
   summaryElement.dataset.tone = tone;
 }
 
+function trackEvent(name, parameters = {}) {
+  window.gtag?.('event', name, parameters);
+}
+
 function showEmptyState() {
   const emptyState = document.createElement('p');
   emptyState.className = 'empty-state';
@@ -129,6 +133,11 @@ async function prepareFiles(files) {
     const estimate = prepared.reduce((sum, image) => sum + bc1MipChainByteLength(image.width, image.height), 7 + prepared.length * 8);
     const suffix = failures ? `（${failures} 枚は読み込めませんでした）` : '';
     setStatus(`${prepared.length} 枚を準備しました • 変換後 約 ${formatBytes(estimate)} ${suffix}`, failures ? 'error' : '');
+    trackEvent('images_prepared', {
+      image_count: prepared.length,
+      estimated_output_bytes: estimate,
+      max_edge: Number(maxEdgeSelect.value),
+    });
   } else {
     showEmptyState();
   }
@@ -158,6 +167,11 @@ function encodeOne(image, quality) {
 async function runEncoding() {
   if (isEncoding || !prepared.length) return;
   const quality = qualitySelect.value;
+  trackEvent('conversion_started', {
+    image_count: prepared.length,
+    max_edge: Number(maxEdgeSelect.value),
+    quality,
+  });
   encoded = [];
   isEncoding = true;
   setBusy(true);
@@ -187,6 +201,12 @@ async function runEncoding() {
     downloadButton.disabled = false;
     const container = createKareiPhotoContainer(encoded);
     setStatus(`${encoded.length} 枚の変換が完了しました • ${formatBytes(container.byteLength)}`, 'success');
+    trackEvent('conversion_completed', {
+      image_count: encoded.length,
+      output_bytes: container.byteLength,
+      max_edge: Number(maxEdgeSelect.value),
+      quality,
+    });
   } else {
     downloadButton.disabled = true;
     setStatus(`${prepared.length - encoded.length} 枚を変換できませんでした。設定を変えて、もう一度お試しください。`, 'error');
@@ -195,6 +215,10 @@ async function runEncoding() {
 
 function downloadPack() {
   const bytes = createKareiPhotoContainer(encoded);
+  trackEvent('kphoto_download', {
+    image_count: encoded.length,
+    output_bytes: bytes.byteLength,
+  });
   const blob = new Blob([bytes], { type: 'application/octet-stream' });
   const url = URL.createObjectURL(blob);
   const anchor = document.createElement('a');

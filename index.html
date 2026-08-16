@@ -5,6 +5,14 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="theme-color" content="#171a21">
   <meta name="description" content="写真を Karei Photo で使える .kphoto ファイルへ。画像はアップロードせず、ブラウザ内で変換します。">
+  <!-- Google tag (gtag.js) -->
+  <script async src="https://www.googletagmanager.com/gtag/js?id=G-DWF3DE3GZG"></script>
+  <script>
+    window.dataLayer = window.dataLayer || [];
+    function gtag(){dataLayer.push(arguments);}
+    gtag('js', new Date());
+    gtag('config', 'G-DWF3DE3GZG');
+  </script>
   <title>Karei Photo — 写真を .kphoto に変換</title>
   <link rel="manifest" href="./manifest.webmanifest">
   <link rel="stylesheet" href="./styles.css">
@@ -81,7 +89,7 @@
   </main>
 
   <footer>
-    <p>Karei Photo は画像を外部サーバーへ送信しません。変換処理はこの端末のブラウザ内で行われます。</p>
+    <p>Karei Photo は画像を外部サーバーへ送信しません。変換処理はこの端末のブラウザ内で行われます。サイトの利用状況は <a href="https://policies.google.com/privacy" target="_blank" rel="noopener noreferrer">Google Analytics</a> で計測しています。</p>
   </footer>
 
   <template id="result-template">
@@ -96,6 +104,6 @@
       </div>
     </article>
   </template>
-  <script type="module" src="./src/app.js?v=4"></script>
+  <script type="module" src="./src/app.js?v=5"></script>
 </body>
 </html>
