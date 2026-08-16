@@ -1,0 +1,17 @@
+{
+  "name": "Karei Photo — 写真を .kphoto に変換",
+  "short_name": "Karei Photo",
+  "description": "写真を Karei Photo で使える .kphoto ファイルに変換します。",
+  "start_url": "./",
+  "display": "standalone",
+  "background_color": "#171a21",
+  "theme_color": "#171a21",
+  "icons": [
+    {
+      "src": "./assets/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}

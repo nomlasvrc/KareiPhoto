@@ -1,0 +1,22 @@
+# Dependencies and generated files
+node_modules/
+dist/
+coverage/
+.cache/
+*.log
+*.kphoto
+
+# Internal development notes
+/docs/RESEARCH.md
+
+# Local configuration
+.env
+.env.*
+!.env.example
+.vscode/
+.idea/
+
+# Operating system files
+.DS_Store
+Thumbs.db
+Desktop.ini
