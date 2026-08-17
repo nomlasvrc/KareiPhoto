@@ -12,10 +12,11 @@ const summaryElement = document.querySelector('#summary');
 const installButton = document.querySelector('#install');
 const maxEdgeSelect = document.querySelector('#max-edge');
 const qualitySelect = document.querySelector('#quality');
+const SIZE_WARNING_BYTES = 100 * 1024 ** 2;
 
 /** @type {Array<{id:string,file:File,name:string,width:number,height:number,rgba:Uint8ClampedArray,card:HTMLElement}>} */
 let prepared = [];
-/** @type {Array<{name:string,width:number,height:number,data:Uint8Array}>} */
+/** @type {Array<{id:string,name:string,width:number,height:number,data:Uint8Array}>} */
 let encoded = [];
 let installPrompt = null;
 let preparationGeneration = 0;
@@ -28,6 +29,21 @@ const formatBytes = (bytes) => bytes < 1024 ? `${bytes} B` : bytes < 1024 ** 2
 function setStatus(text, tone = '') {
   summaryElement.textContent = text;
   summaryElement.dataset.tone = tone;
+}
+
+/** @param {Array<{width:number,height:number}>} images */
+function estimatedContainerByteLength(images) {
+  return images.reduce(
+    (sum, image) => sum + 8 + bc1MipChainByteLength(image.width, image.height),
+    7,
+  );
+}
+
+/** @param {number} bytes @param {'見込み'|'変換後'} phase */
+function sizeWarning(bytes, phase) {
+  return bytes > SIZE_WARNING_BYTES
+    ? ` • 警告: ${phase}サイズが 100 MB を超えています`
+    : '';
 }
 
 function trackEvent(name, parameters = {}) {
@@ -46,6 +62,7 @@ function setBusy(busy) {
   maxEdgeSelect.disabled = busy;
   qualitySelect.disabled = busy;
   clearButton.disabled = busy;
+  for (const button of resultsElement.querySelectorAll('.remove-image')) button.disabled = busy;
   dropZone.classList.toggle('disabled', busy);
   dropZone.setAttribute('aria-busy', String(busy));
 }
@@ -91,17 +108,65 @@ async function decodeFile(file) {
   return { ...dimensions, rgba: pixels };
 }
 
-/** @param {string} name @param {number} width @param {number} height @param {Uint8ClampedArray} rgba */
-function createResultCard(name, width, height, rgba) {
+/** @param {string} id @param {string} name @param {number} width @param {number} height @param {Uint8ClampedArray} rgba */
+function createResultCard(id, name, width, height, rgba) {
   const template = document.querySelector('#result-template');
   const card = template.content.firstElementChild.cloneNode(true);
   resultsElement.querySelector('.empty-state')?.remove();
   card.querySelector('.result-name').textContent = name;
   card.querySelector('.result-meta').textContent = `${width} × ${height} • 変換後 約 ${formatBytes(bc1MipChainByteLength(width, height))}`;
+  const removeButton = card.querySelector('.remove-image');
+  removeButton.setAttribute('aria-label', `${name} を削除`);
+  removeButton.title = `${name} を削除`;
+  removeButton.addEventListener('click', () => removeImage(id));
   paintCanvas(card.querySelector('.original'), rgba, width, height);
   card.querySelector('.result-state').textContent = '待機中';
   resultsElement.append(card);
   return card;
+}
+
+function updatePreparedStatus() {
+  if (!prepared.length) {
+    encoded = [];
+    showEmptyState();
+    encodeButton.disabled = true;
+    downloadButton.disabled = true;
+    setStatus('写真を選択すると、ここに変換後のサイズが表示されます。');
+    return;
+  }
+
+  encodeButton.disabled = false;
+  const estimate = estimatedContainerByteLength(prepared);
+  const warning = sizeWarning(estimate, '見込み');
+  setStatus(
+    `${prepared.length} 枚を準備しました • 変換後 約 ${formatBytes(estimate)}${warning}`,
+    warning ? 'warning' : '',
+  );
+}
+
+/** @param {string} id */
+function removeImage(id) {
+  if (isEncoding) return;
+  const index = prepared.findIndex((image) => image.id === id);
+  if (index < 0) return;
+
+  prepared[index].card.remove();
+  prepared.splice(index, 1);
+  encoded = encoded.filter((image) => image.id !== id);
+
+  if (!prepared.length || encoded.length !== prepared.length) {
+    if (encoded.length) resetConversion();
+    updatePreparedStatus();
+    return;
+  }
+
+  const container = createKareiPhotoContainer(encoded);
+  const warning = sizeWarning(container.byteLength, '変換後');
+  downloadButton.disabled = false;
+  setStatus(
+    `${encoded.length} 枚の変換が完了しました • ${formatBytes(container.byteLength)}${warning}`,
+    warning ? 'warning' : 'success',
+  );
 }
 
 async function prepareFiles(files) {
@@ -119,8 +184,9 @@ async function prepareFiles(files) {
     try {
       const image = await decodeFile(file);
       if (generation !== preparationGeneration) return;
-      const card = createResultCard(file.name, image.width, image.height, image.rgba);
-      prepared.push({ id: `${Date.now()}-${index}`, file, name: file.name, ...image, card });
+      const id = `${generation}-${index}`;
+      const card = createResultCard(id, file.name, image.width, image.height, image.rgba);
+      prepared.push({ id, file, name: file.name, ...image, card });
     } catch (error) {
       failures += 1;
       setStatus(error instanceof Error ? error.message : String(error), 'error');
@@ -130,9 +196,13 @@ async function prepareFiles(files) {
   setBusy(false);
   if (prepared.length) {
     encodeButton.disabled = false;
-    const estimate = prepared.reduce((sum, image) => sum + bc1MipChainByteLength(image.width, image.height), 7 + prepared.length * 8);
+    const estimate = estimatedContainerByteLength(prepared);
     const suffix = failures ? `（${failures} 枚は読み込めませんでした）` : '';
-    setStatus(`${prepared.length} 枚を準備しました • 変換後 約 ${formatBytes(estimate)} ${suffix}`, failures ? 'error' : '');
+    const warning = sizeWarning(estimate, '見込み');
+    setStatus(
+      `${prepared.length} 枚を準備しました • 変換後 約 ${formatBytes(estimate)}${warning} ${suffix}`,
+      failures ? 'error' : warning ? 'warning' : '',
+    );
     trackEvent('images_prepared', {
       image_count: prepared.length,
       estimated_output_bytes: estimate,
@@ -185,7 +255,7 @@ async function runEncoding() {
       const result = await encodeOne(image, quality);
       const data = new Uint8Array(result.dataBuffer);
       const decoded = new Uint8ClampedArray(result.decodedBuffer);
-      encoded.push({ name: image.name, width: image.width, height: image.height, data });
+      encoded.push({ id: image.id, name: image.name, width: image.width, height: image.height, data });
       paintCanvas(image.card.querySelector('.decoded'), decoded, image.width, image.height);
       image.card.querySelector('.result-state').textContent = `変換完了 • ${formatBytes(data.byteLength)}`;
       image.card.classList.add('complete');
@@ -200,7 +270,11 @@ async function runEncoding() {
   if (encoded.length === prepared.length) {
     downloadButton.disabled = false;
     const container = createKareiPhotoContainer(encoded);
-    setStatus(`${encoded.length} 枚の変換が完了しました • ${formatBytes(container.byteLength)}`, 'success');
+    const warning = sizeWarning(container.byteLength, '変換後');
+    setStatus(
+      `${encoded.length} 枚の変換が完了しました • ${formatBytes(container.byteLength)}${warning}`,
+      warning ? 'warning' : 'success',
+    );
     trackEvent('conversion_completed', {
       image_count: encoded.length,
       output_bytes: container.byteLength,

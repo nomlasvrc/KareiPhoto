@@ -96,7 +96,10 @@
     <article class="result-card">
       <div class="result-header">
         <div><h3 class="result-name"></h3><p class="result-meta"></p></div>
-        <p class="result-state"></p>
+        <div class="result-actions">
+          <p class="result-state"></p>
+          <button class="remove-image" type="button" aria-label="この画像を削除" title="画像を削除">×</button>
+        </div>
       </div>
       <div class="canvases">
         <figure><figcaption>変換前</figcaption><canvas class="original"></canvas></figure>
@@ -104,6 +107,6 @@
       </div>
     </article>
   </template>
-  <script type="module" src="./src/app.js?v=5"></script>
+  <script type="module" src="./src/app.js?v=6"></script>
 </body>
 </html>
